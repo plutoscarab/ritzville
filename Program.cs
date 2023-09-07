@@ -139,6 +139,7 @@ class Program
                 var turn = 0;
                 var chips = Enumerable.Range(0, players).Select(p => new int[colors]).ToArray();
                 var coupons = Enumerable.Range(0, players).Select(p => new int[colors]).ToArray();
+                var score = new int[players];
 
                 while (deal.Any() || tableau.Any())
                 {
@@ -294,7 +295,7 @@ class Program
             sectorNum++;
         }
 
-        var gammaMap = ColorMap.FromGamma(1.0);
+        var gammaMap = ColorMap.FromGamma(2.0);
 
         var pointsPaint = new SKPaint
         {
@@ -507,7 +508,7 @@ class Program
                     canvas.Translate(px + thWidth / 2, py + thHeight / 2);
                     canvas.RotateDegrees(angle);
                     canvas.Translate(-px - thWidth / 2, -py - thHeight / 2);
-                    canvas.DrawBitmap(cardBitmap, SKRect.Create(x * (thWidth + gridMargin) + gridMargin / 2, y * (thHeight + gridMargin) + gridMargin / 2, thWidth, thHeight), smooth);
+                    canvas.DrawBitmap(cardBitmap, SKRect.Create(px, py, thWidth, thHeight), smooth);
                     canvas.ResetMatrix();
                 }
             }
@@ -515,6 +516,75 @@ class Program
             canvas.Flush();
             Save(bmp, "gen/tableau.png");
         }
+
+        /*
+        gridX = colors;
+        rand = new Random();
+        const int players = 4;
+        List<int>[] playerCards;
+
+        while (true)
+        {
+            var deal = Enumerable.Range(0, deck.Count).ToList();
+            var scores = new int[players];
+            playerCards = Enumerable.Range(0, players).Select(_ => new List<int>()).ToArray();
+            var coupons = Enumerable.Range(0, players).Select(_ => new int[colors]).ToArray();
+            
+            while (scores.All(s => s < 25))
+            {
+                var cp = rand.Next(players);
+                var id = Draw(deal, rand);
+                playerCards[cp].Add(id);
+                var card = deck[id];
+                var info = deckInfo[id / colors];
+                scores[cp] += info.Points;
+
+                if (Enumerable.Range(0, colors).All(i => coupons[cp][i] >= card[i]))
+                    scores[cp] += info.Bonus;
+
+                coupons[cp][id % colors]++;
+            }
+
+            if (scores.Min() >= 15)
+                break;
+        }
+
+        for (var player = 0; player < players; player++)
+        {
+            using (var bmp = new SKBitmap((int)Math.Ceiling((thWidth + gridMargin) * gridX), (int)Math.Ceiling((thHeight + gridMargin) * gridY)))
+            {
+                var canvas = new SKCanvas(bmp);
+                var ids = playerCards[player];
+                var ix = 0;
+
+                for (var x = 0; x < gridX; x++)
+                {
+                    var cards = ids.Where(id => (id % colors) == x).OrderBy(id => deckInfo[id / colors].Points).ToList();
+
+                    for (var y = 0; y < cards.Count; y++)
+                    {
+                        var id = cards[y];
+                        var px = ix * (thWidth + gridMargin) + gridMargin / 2 + rand.Next(21) - 10;
+                        var py = y * (thHeight / 5) + gridMargin / 2;
+                        var angle = rand.Next(6) - 3;
+
+                        using var cardBitmap = SKBitmap.Decode($"thumb/card{id}.png");
+                        canvas.Translate(px + thWidth / 2, py + thHeight / 2);
+                        canvas.RotateDegrees(angle);
+                        canvas.Translate(-px - thWidth / 2, -py - thHeight / 2);
+                        canvas.DrawBitmap(cardBitmap, SKRect.Create(px, py, thWidth, thHeight), smooth);
+                        canvas.ResetMatrix();
+                    }
+
+                    if (cards.Any())
+                        ix++;
+                }
+
+                canvas.Flush();
+                Save(bmp, $"gen/hand{player + 1}.png");
+            }
+        }
+        */
     }
 
     void Save(SKBitmap bitmap, string filename)
