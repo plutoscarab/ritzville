@@ -1,0 +1,6 @@
+commercial  E0D0A0
+financial   BA1F34
+government  2053A3
+housing     23883C
+industrial  202020
+services    5D308F

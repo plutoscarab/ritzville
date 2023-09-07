@@ -1,0 +1,131 @@
+commercial	Swiftstream Gas Station
+commercial	Fin Shaker’s Market			{Akin's Fresh} Market
+commercial	Timber Top Lumber
+commercial	Auto Essentials Mart
+commercial	Radiant Fraternity
+commercial	Jubilee Junction Park
+commercial	Mistaken Marji Gas			{Jake's Mini Mart} Gas
+commercial	Grab-N-Go Oasis
+commercial	Welch-Bass Tire Center		{Les Schwab} Tire Center
+commercial	Velvet Spool Arts			{Love's Travel Stop}
+commercial	Podgy Otter Grocery			{Pretty Good} Grocery
+commercial	Innovate Appliance
+commercial	MaxMile Fuel
+commercial	Kerrie Motor Company		{Rieker} Motor Company
+commercial	Mitten Heaven Gift Shop		{The Main Event} Gift Shop
+commercial	Noble Assemblage of Brothers
+commercial	NatureNest Florist
+commercial	Ritzville Cinema
+commercial	Sunflower Sewing & Liquor	ode to Wildflower Quilt & Liquor
+commercial	Ed Sanka Bobsled & Hardware	{Danekas} and ode to Cool Runnings
+commercial	Oakshire Crest Links
+
+financial	R. R. Hefter Bank				{Frank Herbert}
+financial	Veritas Venture Advisors
+financial	Grainville Legal Services
+financial	PrairieProtect Insurance
+financial	Unity Community Credit Union	play on unity
+financial	Benetton Lombardi Accountants	{Benoit Mandelbrot} Accountants
+financial	Ritzville Collection Agency
+financial	Bartholemy, Doff & Muriel CPAs	{Full Fathom Embroidery} CPAs
+financial	Harvest Heritage Bank
+financial	Unman & Gray Auditors			{Gary Numan} Auditors
+financial	Heartland Harvest Insurers
+financial	Rik Elton Jr. Law Office		{J. R. R. Tolkien} Law Office
+financial	Golden Grain Farm Credit
+financial	Clarke, Steffi & Wilow CPAs		{Leffel, Otis & Warwick} CPAs
+financial	Amber Acres Insurance
+financial	Sunset Wheat Law Firm
+financial	Amber Fields Bank
+financial	Hall and Turner Group
+financial	Sheaf Shield Assurance
+financial	Ethan Wald Investments			{Wheatland} Investments
+financial	Fitz, Ivy, Tiller & Co.			{City of Ritzville}
+
+government	Amie Ohm Elementary			{Amelie Emmy Noether}
+government	Stronghold Fire Station		{Lord of the Rings} Station
+government	Ritzville Post Office
+government	Ritzville Solid Waste
+government	Ritzville Police
+government	State Vehicle Licensing
+government	County Middle School
+government	County Fire District
+government	Lucinda Gambles Courthouse	{Charles-Augustin de Coulomb}
+government	County Safety Center
+government	City Chamber of Commerce
+government	Department of Licensing
+government	Wheatland High School
+government	Ritzville Library
+government	Wastewater Associates
+government	Voltwave Power Company
+government	State Patrol
+government	County Public Works
+government	County Treasurer
+government	Noxious Weed Control Board
+government	Aquifer Reclamation Project
+
+housing		Wellness Ways Clinic
+housing		Ritzville Lodge
+housing		Rural Vista Properties
+housing		Livestock Vitality Center
+housing		Onus Opus Care Clinic			{Nicolaus Copernicus}
+housing		Happier Totem Motel				{Top Hat / Empire} Motel
+housing		Ferry Ave. Estates				{Fever Ray} Estates
+housing		Cat & Cattle Veterinary
+housing		Erhard Fisc Surgical			{Carl Friedrich Gauss}
+housing		Wheelbarrow Inn
+housing		Basin Vision Properties
+housing		Golden Fields Therapy
+housing		Harmony Healing Healthcare
+housing		Cedar Crest Country Inn
+housing		Sagebrush Terrace
+housing		Farmland Escape Lodge
+housing		Wheatland Family Medicine
+housing		Heartland Hideaway Motel
+housing		Basin Shingle Solutions
+housing		Reptile Barge Landscaping		{Peter Gabriel} Landscaping
+housing		F. T. Combs Home Inspections	play on fine-toothed comb
+
+industrial	Maraca Hayfield Acres		{Michael Faraday} Acres
+industrial	Hawking Fertilizer			ode to Stephen Hawking
+industrial	Bell’s Farm Equipment		ode to John Stewart Bell
+industrial	Columbia Ag Supply
+industrial	Fridaymen Ranch				{Richard Feynman}
+industrial	Hubble Agriculture Service	ode to Edwin Hubble
+industrial	Pulsar Implement Co.
+industrial	Canning Valley Foods		play on uncanny valley
+industrial	Floyd Legacy Farm			ode to Pink Floyd
+industrial	Doppler Farm Equipment		ode to Christian Doppler
+industrial	Redshift Precision Machine
+industrial	Express Fleet Services
+industrial	Lagrange Point Farm			ode to Joseph-Louis Lagrange
+industrial	Ogico NW Harvester Grange	{George Washington Carver}
+industrial	Bates Interline Trucking	{Albert Einstein} Trucking
+industrial	LEA Silo & Tank				{Nikola Tesla}
+industrial	Fermi Paradise Farms		ode to Enrico Fermi
+industrial	Heisenberg Certain Foods	ode to Werber Heisenberg
+industrial	Plate Tructonics LLC		play on plate techtonics
+industrial	Greer Mortaring				anagram of George R.R. Martin
+industrial	Wright Aerial Application	ode to Wright brothers
+
+services	Gospel Heritage Church
+services	Rum Tappers Eatery			{Supertramp} Eatery
+services	InfinityFrame Contractors
+services	Radiant Beacon Church
+services	TurboThrive Garage
+services	Serenity Strand Salon
+services	Luminous Ascension Church
+services	Lucky Russophobe Grill		{Porky's Clubhouse} Grill
+services	Alloy Alchemy Auto Shop
+services	Enigma Hope Cathedral		{Imogen Heap} Cathedral
+services	Jackafee’s Cafe				{Jake's Cafe} Cafe
+services	Emblem Era Construction
+services	Sanctuary of Seraphic Light
+services	Thailand Kegs Gastropub		{Talking Heads} Gastropub
+services	Maggie’s ICD Computer		{Gigamedics} Compupter
+services	Velvet Vista Upholsterers
+services	Serenity Haven Funerals
+services	Verve Vista Design Co.
+services	Ritzville Elders Haven
+services	Touch n' Glow Detailing
+services	Sedna Siren Repair			ode to the noon siren, and Sedna the sea goddess
