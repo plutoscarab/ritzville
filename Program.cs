@@ -4,34 +4,40 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
+using System.Drawing;
+using System.Reflection.Metadata;
 using SkiaSharp;
 
 record CardInfo(int Id, int Index, int[] Cost, int Points, int Bonus);
 
+record Card(int Id, int[] Cost, int Points, int Bonus, int Color, string Name);
+
 class Program
 {
+    const int colors = 6;
+    const double dpi = 300;
+    const double pixelsPerMillimeter = dpi / 25.4;
+    const double pixelsPerPoint = dpi / 72.0;
+    const int cutWidth = (int)(63 * pixelsPerMillimeter + .5);
+    const int cutHeight = (int)(88 * pixelsPerMillimeter + .5);
+
+    static readonly SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+
+
     static void Main()
     {
         var p = new Program();
         p.Run();
     }
 
-    static void AllCores(Action<int> action)
+    static void OnAllCores(Action<int> action)
     {
         Parallel.ForEach(Enumerable.Range(0, Environment.ProcessorCount), action);
     }
 
     void Run()
     {
-        const int colors = 6;
         const int maxColorsPerCard = 4;
-
-        const double dpi = 300;
-        const double pixelsPerMillimeter = dpi / 25.4;
-        const double pixelsPerPoint = dpi / 72.0;
-
-        const int cutWidth = (int)(63 * pixelsPerMillimeter + .5);
-        const int cutHeight = (int)(88 * pixelsPerMillimeter + .5);
 
 #if GAME_CRAFTER
         const int cardWidth = 825;
@@ -63,8 +69,16 @@ class Program
             cardPaint.Add(new SKPaint { Color = color.WithAlpha(128) });
         });
 
+        var names = sectors.ToDictionary(s => s, s => new List<string>());
+
+        "names.txt".SplitLines('\t', tabs =>
+        {
+            if (tabs.Count() >= 2)
+                names[tabs[0]].Add(tabs[1]);
+        });
+
         var wordIndex = 0;
-        var deck = new List<List<int>>();
+        var cardCosts = new List<int[]>();
 
         foreach (var lw in LyndonWords(colors, 3).Skip(1).Reverse())
         {
@@ -112,25 +126,25 @@ class Program
             {
 #if COST_SHIFT
                 var j = (i + wordIndex - 1) % colors;
-                deck.Add(card.Skip(colors - j).Take(j).Concat(card.Take(colors - j)).ToList());
+                cardCosts.Add(card.Skip(colors - j).Take(j).Concat(card.Take(colors - j)).ToArray());
 #else                
-                deck.Add(card.Skip(colors - i).Take(i).Concat(card.Take(colors - i)).ToList());
+                cardCosts.Add(card.Skip(colors - i).Take(i).Concat(card.Take(colors - i)).ToArray());
 #endif
             }
         }
 
         // Keep track of how early each card is purchased in simulations.
-        var firstBuys = Enumerable.Range(0, deck.Count).Select(c => new ConcurrentBag<int>()).ToArray();
+        var firstBuys = Enumerable.Range(0, cardCosts.Count).Select(c => new ConcurrentBag<int>()).ToArray();
 
         // Run simulations on all processors.
-        AllCores(pid =>
+        OnAllCores(pid =>
         {
             var rand = new Random(99169 + pid);
 
             for (var game = 0; game < 10_000 / Environment.ProcessorCount; game++)
             {
-                var deal = new List<List<int>>(deck);
-                var tableau = new List<List<int>>();
+                var deal = new List<int[]>(cardCosts);
+                var tableau = new List<int[]>();
 
                 for (var i = 0; i < 15; i++)
                     tableau.Add(Draw(deal, rand));
@@ -178,7 +192,7 @@ class Program
                                 chips[p][i] -= Math.Max(0, tc[i] - coupons[p][i]);
 
                             // Add coupon
-                            var cardIndex = deck.FindIndex(c => Enumerable.SequenceEqual(c, tc));
+                            var cardIndex = cardCosts.FindIndex(c => Enumerable.SequenceEqual(c, tc));
                             coupons[p][cardIndex % colors]++;
 
                             // Track when card was acquired
@@ -194,7 +208,7 @@ class Program
 
         var bySpeed = new List<(int, double)>();
 
-        for (var i = 0; i < deck.Count / colors; i++)
+        for (var i = 0; i < cardCosts.Count / colors; i++)
         {
             var mins = Enumerable.Range(i * colors, colors).Select(j => firstBuys[j].Min()).ToList();
             var avg = mins.Average();
@@ -203,12 +217,13 @@ class Program
 
         var deckInfo = new List<CardInfo>();
         var cardId = 0;
+        var deck = new List<Card>();
 
-        foreach (var (i, avg) in bySpeed.OrderBy(_ => _.Item2).ThenBy(_ => deck[_.Item1 * colors].Sum()))
+        foreach (var (i, avg) in bySpeed.OrderBy(_ => _.Item2).ThenBy(_ => cardCosts[_.Item1 * colors].Sum()))
         {
             var points = Math.Min(5, (int)Math.Round(avg) - 3);
             Console.Write($"{i + 1,2}: {avg:F2}\t");
-            var card = deck[i * colors];
+            var card = cardCosts[i * colors];
             card.Write(Console.Out, " ");
             Console.Write($"\t{points}");
             var bonus = points > 0 && card.Where(c => c > 0).Min() >= 3 && card.Sum() >= 6 ? (card.Max() + 1) / 2 : 0;
@@ -217,23 +232,42 @@ class Program
                 Console.Write($" (+{bonus})");
 
             Console.WriteLine();
-            deckInfo.Add(new CardInfo(cardId++, i, card.ToArray(), points, bonus));
+            deckInfo.Add(new CardInfo(cardId, i, card.ToArray(), points, bonus));
+
+            for (var c = 0; c < colors; c++)
+            {
+                var index = i * colors + c;
+                deck.Add(new Card(deck.Count, cardCosts[index], points, bonus, c, names[sectors[c]][cardId]));
+            }
+
+            cardId++;
         }
 
-        deckInfo = deckInfo.OrderBy(d => d.Points).ThenBy(d => d.Cost.Sum()).ToList();
+        Directory.CreateDirectory("gen");
+
+        using (var writer = File.CreateText("gen/deck.txt"))
+        {
+            writer.Write("Id\tColor\tPoints\tBonus");
+
+            for (var c = 0; c < colors; c++)
+                writer.Write($"\tCost{c}");
+
+            writer.WriteLine("\tName");
+
+            foreach (var card in deck)
+            {
+                writer.Write($"{card.Id}\t{card.Color}\t{card.Points}\t{card.Bonus}");
+
+                foreach (var c in card.Cost)
+                    writer.Write($"\t{c}");
+
+                writer.WriteLine($"\t{card.Name}");
+            }
+        }
 
         var sectorNum = 0;
-        var names = sectors.ToDictionary(s => s, s => new List<string>());
-
-        "names.txt".SplitLines('\t', tabs =>
-        {
-            if (tabs.Count() >= 2)
-                names[tabs[0]].Add(tabs[1]);
-        });
-
         var discImage = new Dictionary<string, SKBitmap>();
         var insetImage = new Dictionary<string, SKBitmap>();
-        var smooth = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.High };
 
         SKColor Lerp(SKColor a, SKColor b, float t) =>
             new(
@@ -269,7 +303,7 @@ class Program
 
                 bmp.Pixels = pixels;
                 symbol.Pixels = symPixels;
-                Save(bmp, $"gen/{sector}-chip.png");
+                bmp.Save($"gen/{sector}-chip.png");
 
                 // Create the disc graphic from the symbol.
                 const int thickness = 40;
@@ -297,55 +331,32 @@ class Program
 
         var gammaMap = ColorMap.FromGamma(2.0);
 
-        var pointsPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            Typeface = SKTypeface.FromFamilyName("Stencil", SKFontStyle.Bold),
-            TextAlign = SKTextAlign.Right,
-            TextSize = 24 * (float)pixelsPerPoint,
-            IsAntialias = true
-        };
+        SKPaint GetFont(string family, SKFontStyle style, SKTextAlign align, float points) =>
+            new SKPaint { Color = SKColors.Black, IsAntialias = true, Typeface = SKTypeface.FromFamilyName(family, style), TextAlign = align, TextSize = points * (float)pixelsPerPoint };
 
-        var bonusPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            Typeface = SKTypeface.FromFamilyName("Stencil", SKFontStyle.Bold),
-            TextAlign = SKTextAlign.Right,
-            TextSize = 12 * (float)pixelsPerPoint,
-            IsAntialias = true
-        };
+        var pointsPaint = GetFont("Stencil", SKFontStyle.Bold, SKTextAlign.Right, 24f);
+        var bonusPaint = GetFont("Stencil", SKFontStyle.Bold, SKTextAlign.Right, 12f);
+        var namePaint = GetFont("Candara", SKFontStyle.Bold, SKTextAlign.Center, 12f);
+        var idPaint = GetFont("Candara", SKFontStyle.Normal, SKTextAlign.Left, 3f);
 
-        var namePaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            Typeface = SKTypeface.FromFamilyName("Candara", SKFontStyle.Bold),
-            TextAlign = SKTextAlign.Center,
-            TextSize = 12 * (float)pixelsPerPoint,
-            IsAntialias = true
-        };
+        Directory.CreateDirectory("cards");
+        Directory.CreateDirectory("thumb");
 
         // Generate each card-front image.
-        Parallel.ForEach(deckInfo, cardInfo =>
+        Parallel.ForEach(deck, card =>
         {
-            for (var couponColor = 0; couponColor < colors; couponColor++)
+            using (var skbmp = new SKBitmap(cardWidth, cardHeight))
             {
-                var cardNum = cardInfo.Id * colors + couponColor;
-                var card = deck[cardInfo.Index * colors + couponColor];
-                var pngFileName = $"cards/card{cardNum}.png";
-                var thumbFileName = $"thumb/card{cardNum}.png"; // Trimmed and corner-rounded small images.
-                var currentDir = Directory.GetCurrentDirectory();
-
-                using (var skbmp = new SKBitmap(cardWidth, cardHeight))
                 using (var canvas = new SKCanvas(skbmp))
                 {
-                    var sector = sectors[couponColor];
-                    var color = colorScheme[couponColor];
+                    var sector = sectors[card.Color];
+                    var color = colorScheme[card.Color];
 
                     // Card background image.
                     canvas.DrawBitmap(insetImage[sector], new SKRect(0, 0, cardWidth, cardHeight), smooth);
 
                     // Card color overlay tint.
-                    canvas.DrawRect(new SKRect(0, 0, cardWidth, cardHeight), cardPaint[couponColor]);
+                    canvas.DrawRect(new SKRect(0, 0, cardWidth, cardHeight), cardPaint[card.Color]);
 
                     const int marginX = bleedX + safeArea;
                     const int marginY = bleedY + safeArea;
@@ -358,120 +369,145 @@ class Program
                     // Point value.
                     float cursorY = marginY;
 
-                    if (cardInfo.Points > 0)
+                    if (card.Points > 0)
                     {
                         cursorY += pointsPaint.TextSize - 20;
-
-                        canvas.DrawText(
-                            cardInfo.Points.ToString(),
-                            cardWidth - marginX,
-                            cursorY,
-                            pointsPaint);
+                        canvas.DrawText(card.Points.ToString(), cardWidth - marginX, cursorY, pointsPaint);
                     }
 
                     // Bonus point value.
-                    if (cardInfo.Bonus > 0)
+                    if (card.Bonus > 0)
                     {
                         cursorY += bonusPaint.TextSize * 1.5f;
-
-                        canvas.DrawText(
-                            $"(+{cardInfo.Bonus})",
-                            cardWidth - marginX,
-                            cursorY,
-                            bonusPaint);
+                        canvas.DrawText($"(+{card.Bonus})", cardWidth - marginX, cursorY, bonusPaint);
                     }
+
+                    // Card ID.
+                    canvas.DrawText($"{card.Id}", marginX, centerY, idPaint);
 
                     // Cost symbols.
                     const int maxPerCol = 5;
-                    var dotCount = card.Count(c => c > 0) + card.Count(c => c > maxPerCol);
+                    var cost = card.Cost;
+                    var dotCount = cost.Count(c => c > 0) + cost.Count(c => c > maxPerCol);
                     const double dotSpacing = bigDotRadius * 2.5;
                     var x0 = centerX - (dotCount - 1) * dotSpacing / 2;
                     var x = x0;
 
                     for (var i = 0; i < colors; i++)
                     {
-                        var yc = card[i] > maxPerCol ? (card[i] + 1) / 2 : card[i];
+                        var yc = cost[i] > maxPerCol ? (cost[i] + 1) / 2 : cost[i];
                         var y = centerY - (yc - 1) * dotSpacing / 2;
 
-                        for (var j = 0; j < card[i]; j++)
+                        for (var j = 0; j < cost[i]; j++)
                         {
                             canvas.DrawBitmap(discImage[sectors[i]], new SKRect((int)(x - bigDotRadius), (int)(y - bigDotRadius), (int)(x + bigDotRadius), (int)(y + bigDotRadius)), smooth);
 
                             y += dotSpacing;
 
-                            if (card[i] > maxPerCol && j + 1 == yc)
+                            if (cost[i] > maxPerCol && j + 1 == yc)
                             {
-                                y = centerY - (card[i] - yc - 1) * dotSpacing / 2;
+                                y = centerY - (cost[i] - yc - 1) * dotSpacing / 2;
                                 x += dotSpacing;
                             }
                         }
 
-                        if (card[i] > 0)
+                        if (cost[i] > 0)
                         {
                             x += dotSpacing;
                         }
                     }
 
                     // Business name.
-                    var name = names[sector][cardInfo.Id];
-
-                    if (namePaint.MeasureText(name) > cutWidth)
+                    if (namePaint.MeasureText(card.Name) > cutWidth)
                         Debugger.Break();
 
-                    canvas.DrawText(
-                        name,
-                        centerX,
-                        cardHeight - bleedY - safeArea - 20,
-                        namePaint);
+                    canvas.DrawText(card.Name, centerX, cardHeight - bleedY - safeArea - 20, namePaint);
 
                     // Gamma correction.
                     gammaMap.Map(skbmp);
+                }
 
-                    // Save.
-                    Save(skbmp, pngFileName);
+                // Save.
+                skbmp.Save($"cards/card{card.Id}.png");
 
-                    // Create thumbnail image with trimmed edges and rounded corners.
-                    // Trim.
-                    using var rounded = skbmp.Crop(cutWidth, cutHeight); // new SKBitmap(cutWidth, cutHeight);
+                // Create thumbnail image with trimmed edges and rounded corners.
 
-                    // Round.
-                    var cornerR = safeArea;
-                    var bx0 = safeArea - 1;
-                    var bx1 = cutWidth - safeArea;
-                    var y0 = safeArea - 1;
-                    var y1 = cutHeight - safeArea;
+                // Trim.
+                using var rounded = skbmp.Crop(cutWidth, cutHeight);
 
-                    for (var bx = 0; bx < cornerR; bx++)
+                // Round.
+                var cornerR = safeArea;
+                var bx0 = safeArea - 1;
+                var bx1 = cutWidth - safeArea;
+                var by0 = safeArea - 1;
+                var by1 = cutHeight - safeArea;
+
+                for (var bx = 0; bx < cornerR; bx++)
+                {
+                    for (var by = 0; by < cornerR; by++)
                     {
-                        for (var y = 0; y < cornerR; y++)
+                        var r = Math.Sqrt(bx * bx + by * by);
+                        var alpha = (byte)(255 * Math.Clamp(cornerR - r, 0, 1));
+
+                        void UpdateAlpha(int x, int y)
                         {
-                            var r = Math.Sqrt(bx * bx + y * y);
-                            var alpha = r < cornerR - 1 ? 255 : r > cornerR ? 0 : (int)(255 * (cornerR - r));
+                            var pixel = rounded.GetPixel(x, y);
+                            pixel = pixel.WithAlpha((byte)alpha);
+                            rounded.SetPixel(x, y, pixel);
+                        }
 
-                            void UpdateAlpha(int x, int y)
-                            {
-                                var pixel = rounded.GetPixel(x, y);
-                                pixel = pixel.WithAlpha((byte)alpha);
-                                rounded.SetPixel(x, y, pixel);
-                            }
-
-                            if (alpha < 255)
-                            {
-                                UpdateAlpha(bx0 - bx, y0 - y);
-                                UpdateAlpha(bx0 - bx, y1 + y);
-                                UpdateAlpha(bx1 + bx, y0 - y);
-                                UpdateAlpha(bx1 + bx, y1 + y);
-                            }
+                        if (alpha < 255)
+                        {
+                            UpdateAlpha(bx0 - bx, by0 - by);
+                            UpdateAlpha(bx0 - bx, by1 + by);
+                            UpdateAlpha(bx1 + bx, by0 - by);
+                            UpdateAlpha(bx1 + bx, by1 + by);
                         }
                     }
-
-                    // Shrink.
-                    using var thumb = rounded.Resize(rounded.Width / 3, rounded.Height / 3);
-                    Save(thumb, thumbFileName);
                 }
+
+                // Shrink.
+                using var thumb = rounded.Resize(rounded.Width / 3, rounded.Height / 3);
+                thumb.Save($"thumb/card{card.Id}.png");
             }
         });
 
+        var rand = new Random(99169 * 5);
+        var draw = new List<Card>(deck);
+        DumpTableau(NewDeal(draw, rand), rand, "gen/tableau.png");
+        ExampleGame(deck);
+    }
+
+    Card?[] NewDeal(List<Card> draw, Random rand)
+    {
+        var cards = new Card[15];
+
+        for (var i = 0; i < 10; i++)
+        {
+            cards[i] = Draw(draw, rand);
+        }
+
+        for (var i = 10; i < 15; i++)
+        {
+            while (true)
+            {
+                var card = Draw(draw, rand);
+
+                if (card.Points == 0)
+                {
+                    cards[i] = card;
+                    break;
+                }
+
+                draw.Add(card);
+            }
+        }
+
+        return cards;
+    }
+
+    void DumpTableau(Card?[] tableau, Random rand, string filename)
+    {
         var thScale = 0.25;
         var gridX = 5;
         var gridY = 3;
@@ -479,21 +515,9 @@ class Program
         var thWidth = (float)(cutWidth * thScale);
         var thHeight = (float)(cutHeight * thScale);
         var imageInfo = new SKImageInfo((int)Math.Ceiling((thWidth + gridMargin) * gridX), (int)Math.Ceiling((thHeight + gridMargin) * gridY), SKColorType.Bgra8888, SKAlphaType.Unpremul);
-        var rand = new Random(99169);
 
         using (var bmp = new SKBitmap((int)Math.Ceiling((thWidth + gridMargin) * gridX), (int)Math.Ceiling((thHeight + gridMargin) * gridY)))
         {
-            var ids = new int[gridX * gridY];
-
-            for (var i = 0; i < ids.Length; i++)
-            {
-                do
-                {
-                    ids[i] = rand.Next(deck.Count);
-                }
-                while (ids.Take(i).Any(_ => _ == ids[i]) || (i >= gridX * (gridY - 1) && deckInfo[ids[i] / colors].Points != 0));
-            }
-
             var canvas = new SKCanvas(bmp);
 
             for (var y = 0; y < gridY; y++)
@@ -502,97 +526,362 @@ class Program
                 {
                     var px = x * (thWidth + gridMargin) + gridMargin / 2;
                     var py = y * (thHeight + gridMargin) + gridMargin / 2;
-                    var angle = rand.Next(6) - 3;
+                    var angle = (float)rand.NextDouble() * 4 - 2;
+                    var card = tableau[y * gridX + x];
 
-                    using var cardBitmap = SKBitmap.Decode($"thumb/card{ids[y * gridX + x]}.png");
-                    canvas.Translate(px + thWidth / 2, py + thHeight / 2);
-                    canvas.RotateDegrees(angle);
-                    canvas.Translate(-px - thWidth / 2, -py - thHeight / 2);
-                    canvas.DrawBitmap(cardBitmap, SKRect.Create(px, py, thWidth, thHeight), smooth);
-                    canvas.ResetMatrix();
-                }
-            }
-
-            canvas.Flush();
-            Save(bmp, "gen/tableau.png");
-        }
-
-        /*
-        gridX = colors;
-        rand = new Random();
-        const int players = 4;
-        List<int>[] playerCards;
-
-        while (true)
-        {
-            var deal = Enumerable.Range(0, deck.Count).ToList();
-            var scores = new int[players];
-            playerCards = Enumerable.Range(0, players).Select(_ => new List<int>()).ToArray();
-            var coupons = Enumerable.Range(0, players).Select(_ => new int[colors]).ToArray();
-            
-            while (scores.All(s => s < 25))
-            {
-                var cp = rand.Next(players);
-                var id = Draw(deal, rand);
-                playerCards[cp].Add(id);
-                var card = deck[id];
-                var info = deckInfo[id / colors];
-                scores[cp] += info.Points;
-
-                if (Enumerable.Range(0, colors).All(i => coupons[cp][i] >= card[i]))
-                    scores[cp] += info.Bonus;
-
-                coupons[cp][id % colors]++;
-            }
-
-            if (scores.Min() >= 15)
-                break;
-        }
-
-        for (var player = 0; player < players; player++)
-        {
-            using (var bmp = new SKBitmap((int)Math.Ceiling((thWidth + gridMargin) * gridX), (int)Math.Ceiling((thHeight + gridMargin) * gridY)))
-            {
-                var canvas = new SKCanvas(bmp);
-                var ids = playerCards[player];
-                var ix = 0;
-
-                for (var x = 0; x < gridX; x++)
-                {
-                    var cards = ids.Where(id => (id % colors) == x).OrderBy(id => deckInfo[id / colors].Points).ToList();
-
-                    for (var y = 0; y < cards.Count; y++)
+                    if (card != null)
                     {
-                        var id = cards[y];
-                        var px = ix * (thWidth + gridMargin) + gridMargin / 2 + rand.Next(21) - 10;
-                        var py = y * (thHeight / 5) + gridMargin / 2;
-                        var angle = rand.Next(6) - 3;
-
-                        using var cardBitmap = SKBitmap.Decode($"thumb/card{id}.png");
+                        using var cardBitmap = SKBitmap.Decode($"thumb/card{card.Id}.png");
                         canvas.Translate(px + thWidth / 2, py + thHeight / 2);
                         canvas.RotateDegrees(angle);
                         canvas.Translate(-px - thWidth / 2, -py - thHeight / 2);
                         canvas.DrawBitmap(cardBitmap, SKRect.Create(px, py, thWidth, thHeight), smooth);
                         canvas.ResetMatrix();
                     }
-
-                    if (cards.Any())
-                        ix++;
                 }
-
-                canvas.Flush();
-                Save(bmp, $"gen/hand{player + 1}.png");
             }
+
+            canvas.Flush();
+            bmp.Save(filename);
         }
-        */
     }
 
-    void Save(SKBitmap bitmap, string filename)
+    /*
+    gridX = colors;
+    rand = new Random();
+    const int players = 4;
+    List<int>[] playerCards;
+
+    while (true)
     {
-        using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 80);
-        using var stream = File.OpenWrite(filename);
-        data.SaveTo(stream);
+        var deal = Enumerable.Range(0, deck.Count).ToList();
+        var scores = new int[players];
+        playerCards = Enumerable.Range(0, players).Select(_ => new List<int>()).ToArray();
+        var coupons = Enumerable.Range(0, players).Select(_ => new int[colors]).ToArray();
+
+        while (scores.All(s => s < 25))
+        {
+            var cp = rand.Next(players);
+            var id = Draw(deal, rand);
+            playerCards[cp].Add(id);
+            var card = deck[id];
+            var info = deckInfo[id / colors];
+            scores[cp] += info.Points;
+
+            if (Enumerable.Range(0, colors).All(i => coupons[cp][i] >= card[i]))
+                scores[cp] += info.Bonus;
+
+            coupons[cp][id % colors]++;
+        }
+
+        if (scores.Min() >= 15)
+            break;
+    }
+
+    for (var player = 0; player < players; player++)
+    {
+        using (var bmp = new SKBitmap((int)Math.Ceiling((thWidth + gridMargin) * gridX), (int)Math.Ceiling((thHeight + gridMargin) * gridY)))
+        {
+            var canvas = new SKCanvas(bmp);
+            var ids = playerCards[player];
+            var ix = 0;
+
+            for (var x = 0; x < gridX; x++)
+            {
+                var cards = ids.Where(id => (id % colors) == x).OrderBy(id => deckInfo[id / colors].Points).ToList();
+
+                for (var y = 0; y < cards.Count; y++)
+                {
+                    var id = cards[y];
+                    var px = ix * (thWidth + gridMargin) + gridMargin / 2 + rand.Next(21) - 10;
+                    var py = y * (thHeight / 5) + gridMargin / 2;
+                    var angle = rand.Next(6) - 3;
+
+                    using var cardBitmap = SKBitmap.Decode($"thumb/card{id}.png");
+                    canvas.Translate(px + thWidth / 2, py + thHeight / 2);
+                    canvas.RotateDegrees(angle);
+                    canvas.Translate(-px - thWidth / 2, -py - thHeight / 2);
+                    canvas.DrawBitmap(cardBitmap, SKRect.Create(px, py, thWidth, thHeight), smooth);
+                    canvas.ResetMatrix();
+                }
+
+                if (cards.Any())
+                    ix++;
+            }
+
+            canvas.Flush();
+            Save(bmp, $"gen/hand{player + 1}.png");
+        }
+    }
+    */
+
+    void ExampleGame(List<Card> deck)
+    {
+        var bankInit = new[] { 0, 0, 5, 6, 7, 8 };
+        var names = new[] { "Arrow", "Branch", "Cedar", "Dart", "Echo" };
+        var colorNames = new[] { "ivory", "red", "blue", "green", "black", "purple" };
+        var game = 0;
+        var rand = new Random();
+        var maxBonuses = 0;
+
+        while (true)
+        {
+            var players = rand.Next(2, 6);
+            Console.WriteLine($"\nGame {++game}");
+            var wildcardHappened = false;
+            var returnHappened = false;
+            var bank = Enumerable.Range(0, colors).Select(_ => bankInit[players]).ToArray();
+            var chips = Enumerable.Range(0, players).Select(_ => new int[colors]).ToArray();
+            var cards = Enumerable.Range(0, players).Select(_ => new List<Card>()).ToArray();
+            var score = new int[players];
+            var target = new Card?[players];
+
+            var draw = new List<Card>(deck.Where(c => players < 5 || c.Points < 5));
+
+            var tableau = NewDeal(draw, rand);
+
+            const int chipsPerTurn = 3;
+
+            var turn = 0;
+            var player = 0;
+            var buyTurn = 0;
+
+            while (player > 0 || score.All(s => s < 25))
+            {
+                if (player == 0)
+                {
+                    if (turn > buyTurn + 100)
+                    {
+                        DumpTableau(tableau, rand, "gen/debug-tableau.png");
+                        Debugger.Break();
+                    }
+
+                    ++turn;
+                    Console.WriteLine($"\nTurn {turn}");
+                }
+
+                Card? targetCard = null;
+                var best = int.MaxValue;
+                int[] chipsNeeded;
+
+                foreach (var card in tableau.Where(c => c is not null).Cast<Card>().OrderByDescending(c => c.Points))
+                {
+                    if (player == 2 && card.Points == 0)
+                        continue;
+
+                    if (Enumerable.Range(0, players).Where(p => p != player).Select(p => target[p]).Any(c => c?.Id == card.Id))
+                        continue;
+
+                    chipsNeeded = card.Cost.Select((c, i) => Math.Max(0, c - chips[player][i] - cards[player].Count(card => card.Color == i))).ToArray();
+                    var canBuy = Enumerable.Range(0, colors).All(c => bank[c] >= chipsNeeded[c]);
+
+                    if (!canBuy)
+                        continue;
+
+                    var turnsNeeded = Math.Max(chipsNeeded.Max(), (chipsNeeded.Sum() + chipsPerTurn - 1) / chipsPerTurn);
+                    var colorsNeeded = chipsNeeded.Count(c => c > 0);
+                    var colorsAvailable = chipsNeeded.Select((c, i) => c > 0 && bank[i] > 0).Count(b => b);
+
+                    if (turnsNeeded < best && colorsAvailable >= Math.Min(3, colorsNeeded))
+                    {
+                        best = turnsNeeded;
+                        targetCard = card;
+                    }
+                }
+
+                target[player] = targetCard;
+
+                if (targetCard == null)
+                {
+                    // DumpTableau(tableau, rand, "gen/debug-tableau.png");
+                    // Debugger.Break();
+                    targetCard = tableau.Except(target).Where(c => c is not null).Cast<Card>().ToList().Scramble(rand).First();
+                }
+
+                chipsNeeded = targetCard.Cost.Select((c, i) => Math.Max(0, c - chips[player][i] - cards[player].Count(card => card.Color == i))).ToArray();
+                var excess = Enumerable.Range(0, colors).Select(c => Math.Max(0, chips[player][c] - Math.Max(0, targetCard.Cost[c] - cards[player].Count(k => k.Color == c)))).ToArray();
+
+                if (chipsNeeded.Sum() <= excess.Sum() / 3)
+                {
+                    Console.Write($"{names[player]}");
+                    var wild = 0;
+
+                    if (chipsNeeded.Sum() > 0)
+                    {
+                        Console.Write(" turns in");
+
+                        while (chipsNeeded.Sum() > wild)
+                        {
+                            for (var w = 0; w < 3; w++)
+                            {
+                                while (true)
+                                {
+                                    var i = rand.Next(colors);
+
+                                    if (excess[i] > 0)
+                                    {
+                                        excess[i]--;
+                                        chips[player][i]--;
+                                        bank[i]++;
+                                        Console.Write($" {colorNames[i]}");
+                                        break;
+                                    }
+                                }
+                            }
+
+                            wild++;
+                        }
+
+                        Console.Write(" for wildcard and");
+                        wildcardHappened = true;
+                    }
+
+                    buyTurn = turn;
+                    Console.Write($" buys {targetCard.Name}");
+                    var noChips = true;
+
+                    for (var c = 0; c < colors; c++)
+                    {
+                        var pay = Math.Max(0, targetCard.Cost[c] - cards[player].Count(card => card.Color == c));
+
+                        if (pay > 0)
+                            noChips = false;
+
+                        while (pay > chips[player][c] && wild > 0)
+                        {
+                            chips[player][c]++;
+                            bank[c]--;
+                            wild--;
+                        }
+
+                        if (pay > chips[player][c])
+                            Debugger.Break();
+
+                        chips[player][c] -= pay;
+                        bank[c] += pay;
+                    }
+
+                    cards[player].Add(targetCard);
+                    target[player] = null;
+                    score[player] += targetCard.Points;
+
+                    if (targetCard.Points > 0)
+                        Console.Write($" and scores {targetCard.Points}");
+
+                    if (noChips && targetCard.Bonus > 0)
+                    {
+                        score[player] += targetCard.Bonus;
+
+                        if (targetCard.Bonus > 0)
+                            Console.Write($" with +{targetCard.Bonus} bonus");
+                    }
+
+                    Console.WriteLine($" for a total of {score[player]}");
+                    var index = Enumerable.Range(0, tableau.Length).Single(i => tableau[i]?.Id == targetCard.Id);
+
+                    if (draw.Any())
+                    {
+                        tableau[index] = Draw(draw, rand);
+                        Console.WriteLine($"Card is replaced with {tableau[index].Name}");
+                    }
+                    else
+                    {
+                        tableau[index] = null;
+                        Console.WriteLine("Card is not replaced");
+                    }
+                    // DumpTableau(tableau, rand, "gen/debug-tableau.png");
+                }
+                else
+                {
+                    var picks = new HashSet<int>();
+                    Console.Write($"{names[player]} takes chips");
+                    var wasNeeded = (int[])chipsNeeded.Clone();
+
+                    for (var i = 0; i < chipsPerTurn; i++)
+                    {
+                        excess = Enumerable.Range(0, colors).Select(c => Math.Max(0, chips[player][c] - Math.Max(0, targetCard.Cost[c] - cards[player].Count(k => k.Color == c)))).ToArray();
+
+                        if (chips[player].Sum() >= 10 + excess.Sum())
+                            break;
+
+                        var choices = Enumerable.Range(0, colors).Where(i => !picks.Contains(i) && bank[i] > 0).ToList();
+
+                        if (!choices.Any())
+                            break;
+
+                        var max = choices.Max(i => chipsNeeded[i]);
+                        var j = Enumerable.Range(0, colors).ToList().FindIndex(c => bank[c] > 0 && chipsNeeded[c] == max && !picks.Contains(c));
+
+                        if (j == -1)
+                        {
+                            j = Enumerable.Range(0, colors).ToList().FindIndex(c => bank[c] > 0 && chipsNeeded[c] > 0 && !picks.Contains(c));
+                        }
+
+                        if (j == -1)
+                        {
+                            if (chips[player].Sum() >= 10)
+                                break;
+
+                            var cc = Enumerable.Range(0, colors).ToList().Scramble(rand);
+                            j = cc.First(c => !picks.Contains(c) && bank[c] > 0);
+                        }
+
+                        picks.Add(j);
+                        if (chipsNeeded[j] > 0) chipsNeeded[j]--;
+
+                        if (bank[j] == 0)
+                            Debugger.Break();
+
+                        bank[j]--;
+                        chips[player][j]++;
+                        Console.Write($" {colorNames[j]}");
+                    }
+
+                    if (chips[player].Sum() > 10)
+                    {
+                        Console.Write(" and returns");
+                        returnHappened = true;
+
+                        while (chips[player].Sum() > 10)
+                        {
+                            excess = Enumerable.Range(0, colors).Select(c => Math.Max(0, chips[player][c] - Math.Max(0, targetCard.Cost[c] - cards[player].Count(k => k.Color == c)))).ToArray();
+
+                            if (excess.Sum() == 0)
+                                excess = (int[])chips[player].Clone();
+
+                            var extra = Enumerable.Range(0, colors).Where(c => excess[c] > 0).ToList().Scramble(rand).First();
+                            Console.Write($" {colorNames[extra]}");
+
+                            if (chips[player][extra] == 0)
+                                Debugger.Break();
+
+                            chips[player][extra]--;
+                            bank[extra]++;
+                        }
+                    }
+
+                    Console.WriteLine();
+                }
+
+                player = (player + 1) % players;
+
+                if (player == 0)
+                {
+                    Console.Write("Bank has");
+
+                    for (var c = 0; c < colors; c++)
+                      Console.Write($" {bank[c]}");
+
+                    Console.WriteLine();
+                }
+            }
+
+            var bonuses = Enumerable.Range(0, players).Sum(p => score[p] - cards[p].Sum(c => c.Points));
+            maxBonuses = Math.Max(maxBonuses, bonuses);
+
+            if (bonuses > 0 && players == 3 && wildcardHappened && returnHappened)
+                break;
+        }
     }
 
     T Draw<T>(List<T> items, Random rand)

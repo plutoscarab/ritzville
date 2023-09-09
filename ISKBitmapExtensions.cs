@@ -17,9 +17,13 @@ public static class ISKBitmapExtensions
     public static SKBitmap Save(this SKBitmap bmp, string filename)
     {
         using var data = bmp.Encode(SKEncodedImageFormat.Png, 80);
-        using var stream = File.OpenWrite(filename);
-        data.SaveTo(stream);   
-        return bmp;     
+        
+        using (var stream = File.OpenWrite(filename))
+        {
+            data.SaveTo(stream);   
+        }
+
+        return bmp;
     }
 
     public static SKBitmap Resize(this SKBitmap bmp, int width, int height)
