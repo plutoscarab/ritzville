@@ -3,10 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Data;
-using System.Data.Common;
 using System.Diagnostics;
-using System.Reflection.Metadata;
-using System.Security.Principal;
 using System.Text;
 using SkiaSharp;
 
@@ -341,10 +338,15 @@ class Program
             sectorNum++;
         }
 
+        for (var c = 0; c < 2; c++)
+        {
+            $"art/character{c}.png".AsBitmap().Resize(100, 100).Save($"gen/character{c}.png");
+        }
+
         var gammaMap = ColorMap.FromGamma(1.0);
 
         SKPaint GetFont(string family, SKFontStyle style, SKTextAlign align, float points) =>
-            new SKPaint { Color = SKColors.Black, IsAntialias = true, Typeface = SKTypeface.FromFamilyName(family, style), TextAlign = align, TextSize = points * (float)pixelsPerPoint };
+            new() { Color = SKColors.Black, IsAntialias = true, Typeface = SKTypeface.FromFamilyName(family, style), TextAlign = align, TextSize = points * (float)pixelsPerPoint };
 
         var pointsPaint = GetFont("Stencil", SKFontStyle.Bold, SKTextAlign.Right, 24f);
         var bonusPaint = GetFont("Stencil", SKFontStyle.Bold, SKTextAlign.Right, 12f);
@@ -660,6 +662,8 @@ class Program
             writer.WriteLine($"\nGame {++game:G0}");
             var wildcardHappened = false;
             var returnHappened = false;
+            var extraChipsHappened = false;
+            var tieHappened = false;
             var bank = Enumerable.Range(0, colors).Select(_ => bankInit[players]).ToArray();
             var chips = Enumerable.Range(0, players).Select(_ => new int[colors]).ToArray();
             var cards = Enumerable.Range(0, players).Select(_ => new List<Card>()).ToArray();
@@ -683,20 +687,35 @@ class Program
                 var tw = (cutWidth * th) / cutHeight;
                 var ppm = (pixelsPerMillimeter * th) / cutHeight;
                 var csize = (int)(39 * ppm);
-                var pleft = (int)(tw * 6 * 1.1);
+                var pleft = (int)(tw * 6 * 1.1 + csize * 1.3);
+                const int playerSpacing = 200;
                 html.WriteLine("<!DOCTYPE html>");
                 html.WriteLine("<html>");
                 html.WriteLine("<head>");
                 html.WriteLine("<style>");
-                html.WriteLine($".cards {{ height: {th * 3.6}px; }}");
+                html.WriteLine("@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans&family=Saira+Stencil+One&family=Tilt+Warp&display=swap');");
+                html.WriteLine("body { margin: 2em; }");
+                html.WriteLine($".cards {{ height: {th * 3.4}px; width: {5 * tw * 1.1}px; }}");
                 html.WriteLine($".cards img {{ width: {tw}px; height: {th}px; position: absolute; filter: drop-shadow(3px 3px 3px #888888); }}");
-                html.WriteLine($".chips {{ height: {csize * 1.3}px; }}");
+                html.WriteLine($".chips {{ height: {csize * 1.3}px; width: {csize * 1.3}px; }}");
                 html.WriteLine($".chips img {{ width: {csize}px; height: {csize}px; position: absolute; }}");
-                html.WriteLine($".player {{ position: absolute; left: {pleft}px }}");
+                html.WriteLine(".players { padding-left: 1em; }");
+                html.WriteLine(".playerHeader { display: flex; justify-content: space-between; }");
+                html.WriteLine(".name { font-family: 'Tilt Warp', cursive; font-size: 16pt; }");
+                html.WriteLine(".portrait { width: 50px; height: 50px; position: relative; top: 10px; }");
+                html.WriteLine($".player {{ display: flex; background-color: #9AC; width: 450px; height: {playerSpacing - 20}px; }}");
+                html.WriteLine(".score { margin: 1em; font-family: 'Saira Stencil One', cursive; font-size: 16px; width: 30px; height: 30px; border: 3px solid black; border-radius: 20px; display: flex; justify-content: center; align-items: center; }");
+                html.WriteLine(".bonus { margin: .4em 1.35em; font-family: 'Saira Stencil One', cursive; font-size: 14px; width: 30px; height: 30px; border: 3px solid black; border-radius: 20px; display: flex; justify-content: center; align-items: center; background-color: #9EF; }");
+                html.WriteLine(".playArea { width: 400px; }");
+                html.WriteLine("#message { font-family: 'Josefin Sans', sans-serif; font-size: 16pt; max-width: 700px; line-height: 150%; }");
+                html.WriteLine("button { margin: 1.1em; color: #CCC; background-color: #229; border-radius: 0.5em; height: 2em; font-family: 'Josefin Sans', sans-serif; font-size: 16pt; }");
+                html.WriteLine("button:disabled { margin: 1.1em; color: #444; background-color: #999; border-radius: 0.5em; height: 2em; font-family: 'Josefin Sans', sans-serif; font-size: 16pt; }");
+                html.WriteLine(".flex { display: flex; }");
                 html.WriteLine("</style>");
                 html.WriteLine("</head>");
                 html.WriteLine("<body>");
-                html.WriteLine("<div class=\"cards\">");
+                html.WriteLine("<div class='flex'>");
+                html.WriteLine("<div class='cards'>");
 
                 void GetTableauXY(int index, out int x, out int y)
                 {
@@ -714,16 +733,16 @@ class Program
                         continue;
 
                     GetTableauXY(i, out var x, out var y);
-                    html.WriteLine($"<img id=\"card{card.Id}\" src=\"../thumb/card{card.Id}.png\" style=\"left: {x:F0}px; top: {y:F0}px; transform: rotate({card.Angle:F0}deg);\">");
+                    html.WriteLine($"<img id='card{card.Id}' src='../thumb/card{card.Id}.png' style='left: {x:F0}px; top: {y:F0}px; transform: rotate({card.Angle:F0}deg);'>");
                 }
 
                 foreach (var card in draw)
                 {
-                    html.WriteLine($"<img id=\"card{card.Id}\" src=\"../thumb/card{card.Id}.png\" style=\"left: -200px; top: 200px; transform: rotate({card.Angle:F0}deg);\">");
+                    html.WriteLine($"<img id='card{card.Id}' src='../thumb/card{card.Id}.png' style='left: -200px; top: 200px; transform: rotate({card.Angle:F0}deg);'>");
                 }
 
                 html.WriteLine("</div>");
-                html.WriteLine("<div class=\"chips\">");
+                html.WriteLine("<div class='chips'>");
                 var chipIds = Enumerable.Range(0, colors).Select(_ => new Stack<string>()).ToArray();
                 var playerChipIds = Enumerable.Range(0, players).Select(_ => Enumerable.Range(0, colors).Select(_ => new Stack<string>()).ToArray()).ToArray();
 
@@ -743,28 +762,41 @@ class Program
                         GetBankXY(c, out var x, out var y);
                         bank[c]++;
                         var chipId = $"chip{j * colors + c}";
-                        html.WriteLine($"<img id=\"{chipId}\" src=\"{sectors[c]}-disc.png\" style=\"left: {x:F0}px; top: {y:F0}px;\">");
+                        html.WriteLine($"<img id='{chipId}' src='{sectors[c]}-disc.png' style='left: {x:F0}px; top: {y:F0}px;'>");
                         chipIds[c].Push(chipId);
                     }
                 }
 
                 html.WriteLine("</div>");
-                const int playerSpacing = 200;
-                
+                html.WriteLine("<div class='players'>");
+
                 for (var p = 0; p < players; p++)
                 {
-                    var y = p * playerSpacing;
-                    html.WriteLine($"<div class=\"player\" style=\"top: {y:F0}px\">");
-                    html.WriteLine($"<p class=\"name\">{names[p]}</p>");
+                    html.WriteLine("<div class='playerHeader'>");
+                    html.WriteLine($"<p class='name'>{names[p]}</p>");
+                    html.WriteLine($"<img class='portrait' src='character{p}.png'>");
+                    html.WriteLine("</div>");
+                    html.WriteLine($"<div class='player'>");
+                    html.WriteLine("<div>");
+                    html.WriteLine($"<div id='score{p}' class='score'>0</div>");
+                    html.WriteLine($"<div id='bonus{p}' class='bonuses'></div>");
+                    html.WriteLine("</div>");
+                    html.WriteLine($"<div id='player{p}' class='playArea'></div>");
                     html.WriteLine("</div>");
                 }
 
-                html.WriteLine($"<p id=message></p>");
-                html.WriteLine($"<button id=\"advance\" type=\"button\" onclick=\"turn1_0()\">Start game with {names[player]}'s turn {turn}</button>");
+                html.WriteLine("</div>");
+                html.WriteLine("</div>");
+                html.WriteLine("<div class='flex'>");
+                html.WriteLine("<p id='message'></p>");
+                html.WriteLine("<button id='advance' type='button' onclick='turn1_0()'>Start game</button>");
+                html.WriteLine("</div>");
                 html.WriteLine("<script>");
-                html.WriteLine("var message = document.getElementById(\"message\");");
-                html.WriteLine("var advance = document.getElementById(\"advance\");");
+                html.WriteLine("var message = document.getElementById('message');");
+                html.WriteLine("var advance = document.getElementById('advance');");
                 html.WriteLine("var thingsMoving = [];");
+                html.WriteLine("var playerX = [];");
+                html.WriteLine("var playerY = [];");
                 html.WriteLine("function animateThingFrame(timestamp)");
                 html.WriteLine("{");
                 html.WriteLine("if (thingsMoving.length == 0) return;");
@@ -773,9 +805,9 @@ class Program
                 html.WriteLine("var elapsed = timestamp - c.startTime;");
                 html.WriteLine("var t = Math.min(1, elapsed / 200);");
                 html.WriteLine("if (c.startScale === undefined) c.startScale = c.chip.getBoundingClientRect().width / c.chip.offsetWidth;");
-                html.WriteLine("c.chip.style.left = (c.startX + t * (c.endX - c.startX)) + \"px\";");
-                html.WriteLine("c.chip.style.top = (c.startY + t * (c.endY - c.startY)) + \"px\";");
-                html.WriteLine("c.chip.style.transform = \"scale(\" + (c.startScale + t * (c.endScale - c.startScale)) + \")\";");
+                html.WriteLine("c.chip.style.left = (c.startX + t * (c.endX - c.startX)) + 'px';");
+                html.WriteLine("c.chip.style.top = (c.startY + t * (c.endY - c.startY)) + 'px';");
+                html.WriteLine("c.chip.style.transform = 'scale(' + (c.startScale + t * (c.endScale - c.startScale)) + ')';");
                 html.WriteLine("if (t >= 1) thingsMoving.shift();");
                 html.WriteLine("if (thingsMoving.length > 0) window.requestAnimationFrame(animateThingFrame);");
                 html.WriteLine("}");
@@ -805,6 +837,17 @@ class Program
                     var best = double.MaxValue;
                     int[] chipsNeeded;
                     html.WriteLine($"function turn{turn}_{player}() {{");
+
+                    if (player == 0 && turn == 1)
+                    {
+                        for (var p = 0; p < players; p++)
+                        {
+                            html.WriteLine($"var rect{p} = document.getElementById('player{p}').getBoundingClientRect();");
+                            html.WriteLine($"playerX[{p}] = rect{p}.left;");
+                            html.WriteLine($"playerY[{p}] = rect{p}.top;");
+                        }
+                    }
+
                     html.WriteLine("advance.disabled = true;");
                     var message = new StringBuilder();
 
@@ -847,16 +890,20 @@ class Program
                     var chipCounts = new int[colors];
                     List<string> chipStr;
 
+                    int GetPlayX(int color) =>
+                        color * (int)(tw * 1.1 * .5);
+
                     if (chipsNeeded.Sum() <= excess.Sum() / 3)
                     {
                         writer.Write($"{names[player]}");
                         message.Append(names[player]);
                         var wild = 0;
                         int x, y;
-                        
+                        var noChips = true;
 
                         if (chipsNeeded.Sum() > 0)
                         {
+                            noChips = false;
                             writer.Write(" turns in");
 
                             while (chipsNeeded.Sum() > wild)
@@ -876,7 +923,7 @@ class Program
                                             var chipId = playerChipIds[player][i].Pop();
                                             chipIds[i].Push(chipId);
                                             GetBankXY(i, out x, out y);
-                                            html.WriteLine($"animateThing(\"{chipId}\", {x}, {y}, 1, {bank[i]});");
+                                            html.WriteLine($"animateThing('{chipId}', {x}, {y}, 1, {bank[i]});");
                                             bank[i]++;
                                             break;
                                         }
@@ -889,7 +936,7 @@ class Program
                             writer.Write(" for wildcard and");
                             wildcardHappened = true;
                             message.Append(" turns in ");
-                            chipStr = chipCounts.Select((c, i) => c == 0 ? "" : c == 1 ? colorSingular[c] : ordinalName[c] + " " + colorPlural[c]).Where(s => s.Length > 0).ToList();
+                            chipStr = chipCounts.Select((c, i) => c == 0 ? "" : c == 1 ? colorSingular[i] : ordinalName[c] + " " + colorPlural[i]).Where(s => s.Length > 0).ToList();
                             if (chipStr.Count > 1) chipStr[^1] = "and " + chipStr[^1];
                             message.Append(string.Join(chipStr.Count > 2 ? ", " : " ", chipStr));
                             message.Append(" to use as ");
@@ -900,7 +947,6 @@ class Program
                         buyTurn = turn;
                         writer.Write($" buys {targetCard.Name}");
                         Array.Clear(chipCounts);
-                        var noChips = true;
 
                         for (var c = 0; c < colors; c++)
                         {
@@ -926,7 +972,7 @@ class Program
                                 var chipId = playerChipIds[player][c].Pop();
                                 chipIds[c].Push(chipId);
                                 GetBankXY(c, out x, out y);
-                                html.WriteLine($"animateThing(\"{chipId}\", {x}, {y}, 1, {bank[c]});");
+                                html.WriteLine($"animateThing('{chipId}', {x}, {y}, 1, {bank[c]});");
                                 ++bank[c];
                             }
                         }
@@ -938,32 +984,35 @@ class Program
                         message.Append(" to attract ");
                         message.Append(targetCard.Name);
                         message.Append($" to {names[player]}ville");
-
-                        x = (int)(pleft + targetCard.Color * (tw * 1.1 * .5) - tw * .25);
-                        var z = cards[player].Count(c => c.Color == targetCard.Color);
-                        y = player * playerSpacing + csize / 2 + 12 * z + 5;
-                        html.WriteLine($"animateThing(\"card{targetCard.Id}\", {x}, {y}, .5, {z});");
+                        
                         cards[player].Add(targetCard.Stamped());
                         target[player] = null;
-                        score[player] += targetCard.Points;
+                        var z = cards[player].Count(c => c.Color == targetCard.Color);
+                        x = GetPlayX(targetCard.Color) - tw / 4;
+                        y = 12 * z - th / 4;
+                        html.WriteLine($"animateThing('card{targetCard.Id}', {x} + playerX[{player}], {y} + playerY[{player}], .5, {z});");
 
                         if (targetCard.Points > 0)
                         {
+                            score[player] += targetCard.Points;
                             writer.Write($" and scores {targetCard.Points}");
-                        }
 
-                        if (noChips && targetCard.Bonus > 0)
-                        {
-                            score[player] += targetCard.Bonus;
-
-                            if (targetCard.Bonus > 0)
+                            if (noChips && targetCard.Bonus > 0)
                             {
-                                writer.Write($" with +{targetCard.Bonus} bonus");
-                                message.Append($" and earns {ordinalName[targetCard.Bonus]} bonus points");
+                                score[player] += targetCard.Bonus;
+
+                                if (targetCard.Bonus > 0)
+                                {
+                                    writer.Write($" with +{targetCard.Bonus} bonus");
+                                    message.Append($" and earns {ordinalName[targetCard.Bonus]} bonus points");
+                                    html.WriteLine($"document.getElementById('bonus{player}').innerHTML += '<div class=bonus>+{targetCard.Bonus}</div>';");
+                                }
                             }
+
+                            writer.WriteLine($" for a total of {score[player]}");
+                            html.WriteLine($"document.getElementById('score{player}').innerHTML = '{score[player]}';");
                         }
 
-                        writer.WriteLine($" for a total of {score[player]}");
                         message.Append(".");
                         var index = Enumerable.Range(0, tableau.Length).Single(i => tableau[i]?.Id == targetCard.Id);
 
@@ -971,9 +1020,9 @@ class Program
                         {
                             tableau[index] = Draw(draw, rand);
                             writer.WriteLine($"Card is replaced with {tableau[index].Name}");
-                            message.Append($" They draw {tableau[index].Name}.");
+                            message.Append($" They then draw {tableau[index].Name}.");
                             GetTableauXY(index, out x, out y);
-                            html.WriteLine($"animateThing(\"card{tableau[index].Id}\", {x}, {y}, 1, 0);");
+                            html.WriteLine($"animateThing('card{tableau[index].Id}', {x}, {y}, 1, 0);");
                         }
                         else
                         {
@@ -988,6 +1037,7 @@ class Program
                         writer.Write($"{names[player]} takes chips");
                         Array.Clear(chipCounts);
                         var wasNeeded = (int[])chipsNeeded.Clone();
+                        var extraChips = new int[colors];
 
                         for (var i = 0; i < chipsPerTurn; i++)
                         {
@@ -1001,8 +1051,13 @@ class Program
                             if (!choices.Any())
                                 break;
 
+                            var j = -1;
                             var max = choices.Max(i => chipsNeeded[i]);
-                            var j = Enumerable.Range(0, colors).ToList().FindIndex(c => bank[c] > 0 && chipsNeeded[c] == max && !picks.Contains(c));
+
+                            if (max > 0)
+                            {
+                                j = Enumerable.Range(0, colors).ToList().FindIndex(c => bank[c] > 0 && chipsNeeded[c] == max && !picks.Contains(c));
+                            }
 
                             if (j == -1)
                             {
@@ -1016,10 +1071,15 @@ class Program
 
                                 var cc = Enumerable.Range(0, colors).ToList().Scramble(rand);
                                 j = cc.First(c => !picks.Contains(c) && bank[c] > 0);
+                                extraChips[j]++;
+                                extraChipsHappened = true;
+                            }
+                            else
+                            {
+                                chipCounts[j]++;
                             }
 
                             picks.Add(j);
-                            chipCounts[j]++;
                             if (chipsNeeded[j] > 0) chipsNeeded[j]--;
 
                             if (bank[j] == 0)
@@ -1029,9 +1089,9 @@ class Program
                             writer.Write($" {colorNames[j]}");
                             var chipId = chipIds[j].Pop();
                             playerChipIds[player][j].Push(chipId);
-                            var x = (int)(pleft + j * (tw * 1.1 * .5) + .1 * tw * .25 - csize * .125);
-                            var y = player * playerSpacing + 20 - 4 * chips[player][j];
-                            html.WriteLine($"animateThing(\"{chipId}\", {x}, {y}, .5, {chips[player][j]});");
+                            var x = GetPlayX(j) + tw / 4 - csize / 2;
+                            var y = -4 * chips[player][j] - csize;
+                            html.WriteLine($"animateThing('{chipId}', {x} + playerX[{player}], {y} + playerY[{player}], .5, {chips[player][j]});");
                             chips[player][j]++;
                         }
 
@@ -1039,7 +1099,16 @@ class Program
                         chipStr = chipCounts.Select((c, i) => c == 0 ? "" : c == 1 ? colorSingular[i] : ordinalName[c] + " " + colorPlural[i]).Where(s => s.Length > 0).ToList();
                         if (chipStr.Count > 1) chipStr[^1] = "and " + chipStr[^1];
                         message.Append(chipStr.Count == 0 ? "no chips" : string.Join(chipStr.Count > 2 ? ", " : " ", chipStr));
-                        message.Append($" intending to attract {targetCard.Name}");
+                        message.Append($", intending to attract {targetCard.Name}");
+
+                        if (extraChips.Sum() > 0)
+                        {
+                            chipStr = extraChips.Select((c, i) => c == 0 ? "" : c == 1 ? colorSingular[i] : ordinalName[c] + " " + colorPlural[i]).Where(s => s.Length > 0).ToList();
+                            if (chipStr.Count > 1) chipStr[^1] = "and " + chipStr[^1];
+                            message.Append(", and ");
+                            message.Append(string.Join(chipStr.Count > 2 ? ", " : " ", chipStr));
+                            message.Append(" for later");
+                        }
 
                         if (chips[player].Sum() > 10)
                         {
@@ -1062,7 +1131,7 @@ class Program
                                 var chipId = playerChipIds[player][extra].Pop();
                                 chipIds[extra].Push(chipId);
                                 GetBankXY(extra, out var x, out var y);
-                                html.WriteLine($"animateThing(\"{chipId}\", {x}, {y}, 1, {bank[extra]});");
+                                html.WriteLine($"animateThing('{chipId}', {x}, {y}, 1, {bank[extra]});");
                                 chips[player][extra]--;
                                 bank[extra]++;
                             }
@@ -1072,8 +1141,16 @@ class Program
                         message.Append(".");
                     }
 
-                    html.WriteLine($"message.innerHTML = \"{message}\";");
                     player = (player + 1) % players;
+                    var gameOver = player == 0 && score.Any(s => s >= winningScore);
+
+                    if (gameOver)
+                    {
+                        var winner = Enumerable.Range(0, players).MaxBy(p => score[p]);
+                        message.Append($"<br><br>{names[winner]} wins the game with a score of {score[winner]}!");
+                    }
+
+                    html.WriteLine($"message.innerHTML = '{message}';");
 
                     if (player == 0)
                     {
@@ -1088,11 +1165,16 @@ class Program
 
                     if (player == 0 && score.Any(s => s >= winningScore))
                     {
-                        html.WriteLine("advance.innerHTML = \"Game over!\";");
+                        html.WriteLine("advance.innerHTML = 'Game over!';");
+                        tieHappened = score.Count(s => s == score.Max()) > 1;
                     }
                     else
                     {
-                        html.WriteLine($"advance.innerHTML = \"Show {names[player]}'s turn {turn}\";");
+                        if (player == 1 && turn == 1)
+                        {
+                            html.WriteLine($"advance.innerHTML = 'Next';");
+                        }
+
                         html.WriteLine($"advance.onclick = turn{turn}_{player};");
                         html.WriteLine("advance.disabled = false;");
                     }
@@ -1108,7 +1190,7 @@ class Program
             var bonuses = Enumerable.Range(0, players).Sum(p => score[p] - cards[p].Sum(c => c.Points));
             maxBonuses = Math.Max(maxBonuses, bonuses);
 
-            if (bonuses > 0 && players == 2 && wildcardHappened && returnHappened && turn < 37)
+            if (bonuses > 0 && players == 2 && wildcardHappened && returnHappened && extraChipsHappened && !tieHappened && turn < 40)
                 break;
         }
     }
