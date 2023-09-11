@@ -505,20 +505,20 @@ class Program
 
         var rand = new Random(99169 * 5);
         var draw = new List<Card>(deck);
-        DumpTableau(NewDeal(draw, rand, 5), rand, "gen/tableau.png");
+        DumpTableau(NewDeal(draw, rand, 3, 5), rand, 3, "gen/tableau.png");
         ExampleGame(deck, sectors);
     }
 
-    Card?[] NewDeal(List<Card> draw, Random rand, int perRow)
+    Card?[] NewDeal(List<Card> draw, Random rand, int rows, int perRow)
     {
-        var cards = new Card[3 * perRow];
+        var cards = new Card[rows * perRow];
 
-        for (var i = 0; i < 2 * perRow; i++)
+        for (var i = 0; i < (rows - 1) * perRow; i++)
         {
             cards[i] = Draw(draw, rand);
         }
 
-        for (var i = 2 * perRow; i < 3 * perRow; i++)
+        for (var i = (rows - 1) * perRow; i < rows * perRow; i++)
         {
             while (true)
             {
@@ -537,10 +537,10 @@ class Program
         return cards;
     }
 
-    void DumpTableau(Card?[] tableau, Random rand, string filename)
+    void DumpTableau(Card?[] tableau, Random rand, int cardRows, string filename)
     {
         var thScale = 0.25;
-        var gridY = 3;
+        var gridY = cardRows;
         var gridX = (tableau.Length + gridY - 1) / gridY;
         var gridMargin = (float)(cutWidth * thScale * 0.2);
         var thWidth = (float)(cutWidth * thScale);
@@ -654,11 +654,12 @@ class Program
         var game = 0;
         var rand = new Random();
         var maxBonuses = 0;
-        var writer = Console.Out;
+        var writer = TextWriter.Null;
 
         while (game < 2000)
         {
             var players = rand.Next(2, 6);
+            players = 5;
             writer.WriteLine($"\nGame {++game:G0}");
             var wildcardHappened = false;
             var returnHappened = false;
@@ -670,9 +671,10 @@ class Program
             var score = new int[players];
             var target = new Card?[players];
 
-            var draw = new List<Card>(deck.Where(c => players < 5 || c.Points < 5));
-            const int cardsPerRow = 5;
-            var tableau = NewDeal(draw, rand, cardsPerRow);
+            var draw = new List<Card>(deck); //.Where(c => players < 5 || c.Points < 5));
+            var cardsPerRow = players < 5 ? 5 : 7;
+            var cardRows = players < 5 ? 3 : 3;
+            var tableau = NewDeal(draw, rand, cardRows, cardsPerRow);
 
             const int chipsPerTurn = 3;
             const int winningScore = 25;
@@ -681,7 +683,7 @@ class Program
             var player = 0;
             var buyTurn = 0;
 
-            using (var html = File.CreateText("gen/example.html"))
+            using (var html = TextWriter.Null) //File.CreateText("gen/example.html"))
             {
                 var th = 150;
                 var tw = (cutWidth * th) / cutHeight;
@@ -826,7 +828,7 @@ class Program
                     {
                         if (turn > buyTurn + 100)
                         {
-                            DumpTableau(tableau, rand, "gen/debug-tableau.png");
+                            DumpTableau(tableau, rand, cardRows, "gen/debug-tableau.png");
                             Debugger.Break();
                         }
 
