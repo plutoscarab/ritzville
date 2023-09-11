@@ -658,8 +658,7 @@ class Program
 
         while (game < 2000)
         {
-            var players = rand.Next(2, 6);
-            players = 5;
+            var players = 2; //rand.Next(2, 6);
             writer.WriteLine($"\nGame {++game:G0}");
             var wildcardHappened = false;
             var returnHappened = false;
@@ -683,7 +682,7 @@ class Program
             var player = 0;
             var buyTurn = 0;
 
-            using (var html = TextWriter.Null) //File.CreateText("gen/example.html"))
+            using (var html = File.CreateText("gen/example.html"))
             {
                 var th = 150;
                 var tw = (cutWidth * th) / cutHeight;
@@ -707,7 +706,7 @@ class Program
                 html.WriteLine(".portrait { width: 50px; height: 50px; position: relative; top: 10px; }");
                 html.WriteLine($".player {{ display: flex; background-color: #9AC; width: 450px; height: {playerSpacing - 20}px; }}");
                 html.WriteLine(".score { margin: 1em; font-family: 'Saira Stencil One', cursive; font-size: 16px; width: 30px; height: 30px; border: 3px solid black; border-radius: 20px; display: flex; justify-content: center; align-items: center; }");
-                html.WriteLine(".bonus { margin: .4em 1.35em; font-family: 'Saira Stencil One', cursive; font-size: 14px; width: 30px; height: 30px; border: 3px solid black; border-radius: 20px; display: flex; justify-content: center; align-items: center; background-color: #9EF; }");
+                html.WriteLine(".bonus { margin: .4em 1.35em; font-family: 'Saira Stencil One', cursive; font-size: 14px; width: 25px; height: 25px; border: 3px solid black; border-radius: 20px; display: flex; justify-content: center; align-items: center; background-color: #9EF; }");
                 html.WriteLine(".playArea { width: 400px; }");
                 html.WriteLine("#message { font-family: 'Josefin Sans', sans-serif; font-size: 16pt; max-width: 700px; line-height: 150%; }");
                 html.WriteLine("button { margin: 1.1em; color: #CCC; background-color: #229; border-radius: 0.5em; height: 2em; font-family: 'Josefin Sans', sans-serif; font-size: 16pt; }");
@@ -982,7 +981,7 @@ class Program
                         message.Append(" invests ");
                         chipStr = chipCounts.Select((c, i) => c == 0 ? "" : c == 1 ? colorSingular[i] : ordinalName[c] + " " + colorPlural[i]).Where(s => s.Length > 0).ToList();
                         if (chipStr.Count > 1) chipStr[^1] = "and " + chipStr[^1];
-                        message.Append(chipStr.Count == 0 ? "no chips" : string.Join(chipStr.Count > 2 ? ", " : " ", chipStr));
+                        message.Append(chipStr.Count == 0 ? (noChips ? "no chips" : "no additional chips") : string.Join(chipStr.Count > 2 ? ", " : " ", chipStr));
                         message.Append(" to attract ");
                         message.Append(targetCard.Name);
                         message.Append($" to {names[player]}ville");
@@ -1040,12 +1039,13 @@ class Program
                         Array.Clear(chipCounts);
                         var wasNeeded = (int[])chipsNeeded.Clone();
                         var extraChips = new int[colors];
+                        const int chipLimit = 10;
 
                         for (var i = 0; i < chipsPerTurn; i++)
                         {
                             excess = Enumerable.Range(0, colors).Select(c => Math.Max(0, chips[player][c] - Math.Max(0, targetCard.Cost[c] - cards[player].Count(k => k.Color == c)))).ToArray();
 
-                            if (chips[player].Sum() >= 10 + excess.Sum())
+                            if (chips[player].Sum() >= chipLimit + excess.Sum())
                                 break;
 
                             var choices = Enumerable.Range(0, colors).Where(i => !picks.Contains(i) && bank[i] > 0).ToList();
@@ -1068,7 +1068,7 @@ class Program
 
                             if (j == -1)
                             {
-                                if (chips[player].Sum() >= 10)
+                                if (chips[player].Sum() >= chipLimit)
                                     break;
 
                                 var cc = Enumerable.Range(0, colors).ToList().Scramble(rand);
@@ -1112,12 +1112,13 @@ class Program
                             message.Append(" for later");
                         }
 
-                        if (chips[player].Sum() > 10)
+                        if (chips[player].Sum() > chipLimit)
                         {
                             writer.Write(" and returns");
                             returnHappened = true;
+                            Array.Clear(chipCounts);
 
-                            while (chips[player].Sum() > 10)
+                            while (chips[player].Sum() > chipLimit)
                             {
                                 excess = Enumerable.Range(0, colors).Select(c => Math.Max(0, chips[player][c] - Math.Max(0, targetCard.Cost[c] - cards[player].Count(k => k.Color == c)))).ToArray();
 
@@ -1136,7 +1137,13 @@ class Program
                                 html.WriteLine($"animateThing('{chipId}', {x}, {y}, 1, {bank[extra]});");
                                 chips[player][extra]--;
                                 bank[extra]++;
+                                chipCounts[extra]++;
                             }
+
+                            message.Append($". They have more than {chipLimit} chips and decide to return ");
+                            chipStr = chipCounts.Select((c, i) => c == 0 ? "" : c == 1 ? colorSingular[i] : ordinalName[c] + " " + colorPlural[i]).Where(s => s.Length > 0).ToList();
+                            if (chipStr.Count > 1) chipStr[^1] = "and " + chipStr[^1];
+                            message.Append(string.Join(chipStr.Count > 2 ? ", " : " ", chipStr));
                         }
 
                         writer.WriteLine();
