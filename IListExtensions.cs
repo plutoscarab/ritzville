@@ -36,4 +36,13 @@ public static class IListExtensions
         var join = s.Count > 2 ? ", " : " ";
         return string.Join(join, s);
     }
+
+    public static IEnumerable<int> Enumerate(this int n) =>
+        Enumerable.Range(0, n);
+
+    public static T[] InitArray<T>(this int n, Func<T> ctor) =>
+        n.InitArray(_ => ctor());
+
+    public static T[] InitArray<T>(this int n, Func<int, T> ctor) =>
+        n.Enumerate().Select(i => ctor(i)).ToArray();
 }

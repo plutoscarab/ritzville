@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="skiasharp" Version="2.88.5" />
+    <PackageReference Include="skiasharp" Version="2.88.6" />
     <PackageReference Include="system.drawing.common" Version="7.0.0" />
   </ItemGroup>
 
